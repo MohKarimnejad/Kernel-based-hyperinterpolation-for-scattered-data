@@ -1,35 +1,39 @@
-% The Backus Gilbert implementation, use to solve eq (13)
+function [w, residual, r] = BG_solver(Phi, meas, y, delta)
+% Backus-Gilbert cubature weights, eq. (14)-(15), with removal of
+% numerically dependent rows (revised Algorithm 2, lines 5-7).
+%
+%   W = argmin ||R^{-1/2} W||_2  subject to  A~ W = b~,
+%
+% where A~, b~ are the rows of A = Phi and b = y selected by a pivoted QR
+% factorization of A' (numerical rank r: |U_kk| > delta |U_11|).
+% The prior weights are uniform, R = (meas/M) I (Theorem 5 with omega = 1),
+% so the solution is the minimum-norm solution of A~ W = b~; it is computed
+% from the same QR factorization, without forming A~ R A~'.
+%
+% Inputs
+%   Phi   : K x M generator matrix (prod_basis(...)')
+%   meas  : |Omega| (kept for the interface; a scalar R does not change W)
+%   y     : K x 1 moment vector
+%   delta : relative rank tolerance (default 1e-10)
+%
+% Outputs
+%   w        : M x 1 weights (NOT modified; negative weights are returned
+%              as they are)
+%   residual : ||Phi*w - y||_inf / ||y||_inf on ALL K constraints
+%   r        : numerical rank of Phi
 
-function[w, residual] = BG_solver(Phi, meas, y, stability_param)
+    if nargin < 4 || isempty(delta)
+        delta = 1e-10;
+    end
 
-% Option 1: It was previously written by me and Gabrielr, but I doubt
-% if it is correct.
-%Rs_sqrt = sqrt(meas / M) * eye(M);
-%w = Rs_sqrt * pinv(Phi * Rs_sqrt) * y;
+    % Pivoted QR of A':  A'(:,p) = Q U
+    [Q, U, p] = qr(Phi', 0);
+    d = abs(diag(U));
+    r = sum(d > delta * d(1));
 
-M = size(Phi,2);
-Rs = (meas / M) * eye(M);
-ARAT = Phi * Rs * Phi';
+    % A~' = Q(:,1:r) U(1:r,1:r)  ->  min-norm solution of A~ W = b~
+    b_sel = y(p(1:r));
+    w = Q(:, 1:r) * (U(1:r, 1:r)' \ b_sel);
 
-if stability_param == 1
-    % Regularization
-    reg = 1e-10 * trace(ARAT) / size(ARAT,1);
-
-    % Solve
-    lambda = (ARAT + reg * eye(size(ARAT))) \ y;
-
-    % Recover weights
-    w = Rs * Phi' * lambda;
-
-    % Residual
-    residual = norm(Phi*w - y) / norm(y);
-else
-    %Solve (A R A^T) λ = b
-    lambda = ARAT \ y;
-    %Recover weights
-    w = Rs * Phi' * lambda;
-    residual = 0;
-end
-
-
+    residual = norm(Phi * w - y, inf) / norm(y, inf);
 end

@@ -20,8 +20,9 @@ addpath('functions')
 %
 %  Cubature: reduced exactness on (N_K(X) + 1) x 1, so that the number of
 %  constraints is n+1 and any M >= n+1 is admissible.  Weights come from
-%  BG_solver with the same regularization used elsewhere; moments are taken
-%  in closed form on [0,1] via moment_closed_1d.
+%  BG_solver (pivoted QR, no regularization, no clipping of negative
+%  weights; a warning is issued if a weight is nonpositive); moments are
+%  taken in closed form on [0,1] via moment_closed_1d.
 % =========================================================================
 
 %% -------------------------------------------------------------------------
@@ -119,8 +120,10 @@ for k = 1:nk
         Z = haltonseq(M, dim);
 
         Phi = prod_basis(Z, x_A, ker, 1);         % (n+1) x M, reduced
-        [w, ~] = BG_solver(Phi, 1, b_A, 1);
-        w(w < 0) = 0;
+        [w, res_w] = BG_solver(Phi, 1, b_A);   % no weight is modified
+        if min(w) <= 0
+            warning('Test5: nonpositive weight, min(w) = %.2e, M = %d, residual = %.2e', min(w), M, res_w);
+        end
 
         W  = diag(w);
         VZ = ker(Z, x_A);
@@ -203,8 +206,10 @@ for k = 1:nk
         M   = ratioB * n_ctrs;
         Z   = haltonseq(M, dim);
         Phi = prod_basis(Z, x_ctrs, ker, 1);
-        [w, ~] = BG_solver(Phi, 1, b, 1);
-        w(w < 0) = 0;
+        [w, res_w] = BG_solver(Phi, 1, b);   % no weight is modified
+        if min(w) <= 0
+            warning('Test5: nonpositive weight, min(w) = %.2e, M = %d, residual = %.2e', min(w), M, res_w);
+        end
 
         W  = diag(w);
         VZ = ker(Z, x_ctrs);

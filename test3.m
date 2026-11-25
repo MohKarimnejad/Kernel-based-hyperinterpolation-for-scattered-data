@@ -26,6 +26,13 @@ tau_vec   = [2, 3];
 C_ep_vec   = [500, 700];
 
 n_ctrsVec = [20, 30, 45, 60, 80, 105, 140, 180, 200];
+
+% Shape parameter (Reviewer 2, point 9):
+%   "scaled" : ep follows the rule below with h_X of the current set (ep changes with n)
+%   "fixed"  : the same rule is evaluated once with h_X of the LARGEST set,
+%              so the kernel does not depend on n (setting of Corollary 2)
+ep_mode = "scaled";
+fig_tag = sprintf('test3_%s', ep_mode);
 anchor_idx = 2;
 
 q_max      = 50;
@@ -53,6 +60,8 @@ cond_hyper_red  = zeros(nk, nn);
 leb_hyper_full  = zeros(nk, nn);
 leb_hyper_red   = zeros(nk, nn);
 ep_used         = zeros(nk, nn);
+diag_full = cell(nk, nn);   % cubature diagnostics (Reviewer 2, point 7)
+diag_red  = cell(nk, nn);
 
 rms_poly  = zeros(1, nq);
 cond_poly = zeros(1, nq);
@@ -119,6 +128,9 @@ for k = 1:nk
         x_ctrs = get_ctrs(n_ctrs, data_distribution, dim);
 
         h_X            = fill_distance(x_ctrs, 1000);
+        if ep_mode == "fixed"   % h_X of the largest set: ep independent of n
+            h_X = fill_distance(get_ctrs(n_ctrsVec(end), data_distribution, dim), 1000);
+        end
         ep             = C_ep * h_X;
         ep_used(k,idx) = ep;
         ker            = @(x, y) rbf(pdist2(x, y), ep);
@@ -129,15 +141,16 @@ for k = 1:nk
 
         % (A) Full exactness
         reduced_param = 0;
-        y        = moment(ker, x_ctrs, reduced_param);
+        [y, err_qmc, G] = moment(ker, x_ctrs, reduced_param);
         r_target = size(y, 1);
         N_init   = 6 * (n_ctrs + 1);
         meas     = 1;
 
-        [~, Z_full, w_full, ~, ~] = getCF(r_target, N_init, x_ctrs, ...
-            ker, meas, y, reduced_param, dim);
+        [~, Z_full, w_full, ~, ~, info] = getCF(r_target, N_init, x_ctrs, ...
+            ker, meas, y, reduced_param, dim, cf_opts(err_qmc));
 
         VZ_full = ker(Z_full, x_ctrs);
+        diag_full{k,idx} = cf_diagnostics(info, VZ_full, w_full, G, ker(X_test, x_ctrs));
         W_full  = diag(w_full);
         a_full  = LS_stable_solver(W_full, VZ_full, f(Z_full), solver);
 
@@ -147,14 +160,15 @@ for k = 1:nk
 
         % (B) Reduced exactness
         reduced_param = 1;
-        y        = moment(ker, x_ctrs, reduced_param);
+        [y, err_qmc, G] = moment(ker, x_ctrs, reduced_param);
         r_target = size(y, 1);
         N_init   = 2 * (n_ctrs + 1);
 
-        [~, Z_red, w_red, ~, ~] = getCF(r_target, N_init, x_ctrs, ...
-            ker, meas, y, reduced_param, dim);
+        [~, Z_red, w_red, ~, ~, info] = getCF(r_target, N_init, x_ctrs, ...
+            ker, meas, y, reduced_param, dim, cf_opts(err_qmc));
 
         VZ_red = ker(Z_red, x_ctrs);
+        diag_red{k,idx} = cf_diagnostics(info, VZ_red, w_red, G, ker(X_test, x_ctrs));
         W_red  = diag(w_red);
         a_red  = LS_stable_solver(W_red, VZ_red, f(Z_red), solver);
 
@@ -207,7 +221,7 @@ for k = 1:nk
     pub_legend(lg);
     title(sprintf('f_3 - Condition Number - %s kernel - %s points', ...
         rbf_names(k), data_distribution),'FontSize',12,'FontWeight','bold','Color','k');
-    savefig_png(fig_id); fig_id = fig_id + 1;
+    savefig_png(fig_id, fig_tag); fig_id = fig_id + 1;
 end
 
 % =========================================================================
@@ -251,7 +265,7 @@ for k = 1:nk
         rbf_names(k), data_distribution),'FontSize',12,'FontWeight',...
         'bold','Color','k');
 
-    savefig_png(fig_id); fig_id = fig_id + 1;
+    savefig_png(fig_id, fig_tag); fig_id = fig_id + 1;
 end
 
 % =========================================================================
@@ -295,10 +309,13 @@ for k = 1:nk
     fprintf('  %-48s  %+.4f\n', 'Hyper Full:',    slope_lhf);
     fprintf('  %-48s  %+.4f\n', 'Hyper Reduced:', slope_lhr);
 
-    savefig_png(fig_id); fig_id = fig_id + 1;
+    savefig_png(fig_id, fig_tag); fig_id = fig_id + 1;
 end
 
 fprintf('\nDone. %d figures saved.\n', fig_id - 1);
+print_cf_diagnostics(diag_full, rbf_names, n_ctrsVec, sprintf('full exactness, ep %s', ep_mode));
+print_cf_diagnostics(diag_red,  rbf_names, n_ctrsVec, sprintf('reduced exactness, ep %s', ep_mode));
+save(sprintf('diagnostics_%s.mat', fig_tag), 'diag_full', 'diag_red', 'ep_used', 'n_ctrsVec', 'rbf_names');
 
 %% =========================================================================
 %  DIAGNOSTIC — adaptive ep table

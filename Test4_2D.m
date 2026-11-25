@@ -39,6 +39,13 @@ ep_max = 30;
 n_ctrsVec = [80, 105, 140, 180, 240, 300, 380, 460, 560, 680, ...
     800, 1000, 1200];
 
+% Shape parameter (Reviewer 2, point 9):
+%   "scaled" : ep follows the rule below with h_X of the current set (ep changes with n)
+%   "fixed"  : the same rule is evaluated once with h_X of the LARGEST set,
+%              so the kernel does not depend on n (setting of Corollary 2)
+ep_mode = "scaled";
+fig_tag = sprintf('test4_%s', ep_mode);
+
 %% ------------------------------------------------------------------------
 %  Test function: Franke function on [0,1]^2  (local subfunction below)
 % ------------------------------------------------------------------------
@@ -74,6 +81,7 @@ leb_hyper_red = zeros(nk, nn);
 
 M_red_vec = zeros(nk, nn);
 ep_used   = zeros(nk, nn);
+diag_red  = cell(nk, nn);   % cubature diagnostics (Reviewer 2, point 7)
 
 %% -------------------------------------------------------------------------
 %  MAIN LOOP
@@ -92,6 +100,9 @@ for k = 1:nk
         x_ctrs = get_ctrs(n_ctrs, data_distribution, dim);
 
         h_X            = fill_distance(x_ctrs, 100);
+        if ep_mode == "fixed"   % h_X of the largest set: ep independent of n
+            h_X = fill_distance(get_ctrs(n_ctrsVec(end), data_distribution, dim), 100);
+        end
         ep             = min(max(C_ep * h_X, ep_min), ep_max);
         ep_used(k,idx) = ep;
 
@@ -107,17 +118,18 @@ for k = 1:nk
         %  Shared by the least-squares and reduced-hyperinterpolation methods.
         % ------------------------------------------------------------------
         reduced_param = 1;
-        y_red    = moment(ker, x_ctrs, reduced_param);
+        [y_red, err_qmc, G] = moment(ker, x_ctrs, reduced_param);
         r_red    = size(y_red, 1);
         N_init_r = 2 * (n_ctrs + 1);
 
-        [~, Z_red, w_red, ~, ~] = getCF(r_red, N_init_r, x_ctrs, ...
-            ker, meas, y_red, reduced_param, dim);
+        [~, Z_red, w_red, ~, ~, info] = getCF(r_red, N_init_r, x_ctrs, ...
+            ker, meas, y_red, reduced_param, dim, cf_opts(err_qmc));
 
         M_red            = length(w_red);
         M_red_vec(k,idx) = M_red;
 
         VZ_red  = ker(Z_red, x_ctrs);
+        diag_red{k,idx} = cf_diagnostics(info, VZ_red, w_red, G, ker(X_test, x_ctrs));
         W_red   = diag(w_red);
         rhs_red = f(Z_red);
 
@@ -213,7 +225,7 @@ for k = 1:nk
     title(sprintf('f_4 - Condition Number - %s kernel - %s points', ...
         rbf_names(k), data_distribution),'FontSize',12,'FontWeight', ...
         'bold','Color','k');
-    savefig_png(fig_id); fig_id = fig_id + 1;
+    savefig_png(fig_id, fig_tag); fig_id = fig_id + 1;
 end
 
 % =========================================================================
@@ -260,7 +272,7 @@ for k = 1:nk
         rbf_names(k), data_distribution),'FontSize',12,'FontWeight', ...
         'bold','Color','k');
 
-    savefig_png(fig_id); fig_id = fig_id + 1;
+    savefig_png(fig_id, fig_tag); fig_id = fig_id + 1;
 end
 
 % =========================================================================
@@ -306,10 +318,12 @@ for k = 1:nk
     fprintf('  %-48s  %+.4f\n', 'Least Squares:', slope_lu);
     fprintf('  %-48s  %+.4f\n', 'Hyper Reduced:', slope_lhr);
 
-    savefig_png(fig_id); fig_id = fig_id + 1;
+    savefig_png(fig_id, fig_tag); fig_id = fig_id + 1;
 end
 
 fprintf('\nDone. %d figures saved.\n', fig_id - 1);
+print_cf_diagnostics(diag_red,  rbf_names, n_ctrsVec, sprintf('reduced exactness, ep %s', ep_mode));
+save(sprintf('diagnostics_%s.mat', fig_tag), 'diag_red', 'ep_used', 'n_ctrsVec', 'rbf_names');
 
 
 %% =========================================================================
@@ -321,4 +335,4 @@ function v = franke(x, y)
        + 0.75 * exp( -((9*x + 1).^2) / 49 - (9*y + 1) / 10 ) ...
        + 0.50 * exp( -((9*x - 7).^2 + (9*y - 3).^2) / 4 ) ...
        - 0.20 * exp( -( 9*x - 4).^2 - (9*y - 7).^2 );
-end
+end
