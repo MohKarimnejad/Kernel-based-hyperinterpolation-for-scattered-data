@@ -1,4 +1,12 @@
 function val = leb_svd(K_leb, VZ, W, tol_rel)
+% Lebesgue constant (ell^inf(Z) -> Linf(Omega) operator norm) of the weighted
+% least-squares operator, computed with the SAME factorization used for the
+% coefficients in LS_stable_solver.m:
+%   leb_svd(K_leb, VZ, W, "QR")   -> economy QR of sqrt(W)*VZ (Algorithm 1)
+%   leb_svd(K_leb, VZ, W, "SVD")  -> truncated SVD, relative tol 1e-12
+%   leb_svd(K_leb, VZ, W, tol)    -> truncated SVD, relative tol = tol (numeric)
+%
+% Original description (SVD case):
 % SVD-consistent Lebesgue constant (ell^inf(Z) -> Linf(Omega) operator norm).
 %
 % Builds the hat matrix H = K_leb * Vtrunc^+  through the SAME truncated-SVD
@@ -27,6 +35,16 @@ function val = leb_svd(K_leb, VZ, W, tol_rel)
 
     sW = sqrt(W);
     Vt = sW * VZ;                 % M x n  (weighted design matrix)
+
+    if (isstring(tol_rel) || ischar(tol_rel)) && strcmpi(tol_rel, "QR")
+        [Q, R] = qr(Vt, 0);
+        B   = R \ (Q' * sW);      % n x M
+        H   = K_leb * B;
+        val = max(sum(abs(H), 2));
+        return
+    elseif isstring(tol_rel) || ischar(tol_rel)   % "SVD"
+        tol_rel = 1e-12;
+    end
 
     [U, S, Vsvd] = svd(Vt, 'econ');
     s   = diag(S);

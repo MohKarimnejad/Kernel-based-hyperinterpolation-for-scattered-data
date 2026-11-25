@@ -22,23 +22,20 @@ clear; clc; close all
 % -------------------------------------------------------------------------
 dim               = 1;
 data_distribution = "Halton";
-solver            = "SVD";
+solver            = "QR";
 
 f = @(x) abs(x - 0.3).^2.5;
 
 rbf_names = ["LMatern", "QMatern"];
 tau_vec   = [2, 3];
 
-C_ep_vec   = [900, 800];
 
 n_ctrsVec = [20, 30, 45, 60, 80, 105, 140, 180, 200];
 
-% Shape parameter (Reviewer 2, point 9):
-%   "scaled" : ep follows the rule below with h_X of the current set (ep changes with n)
-%   "fixed"  : the same rule is evaluated once with h_X of the LARGEST set,
-%              so the kernel does not depend on n (setting of Corollary 2)
-ep_mode = "fixed";
-fig_tag = sprintf('test2_%s', ep_mode);
+% Shape parameter: fixed, the same for all n and all kernels
+% (setting of Corollary 2; Reviewer 2, point 9)
+ep = 4;
+fig_tag = 'test2';
 anchor_idx = 2;
 
 q_max      = 50;
@@ -125,20 +122,14 @@ for k = 1:nk
 
     rbf_name = rbf_names(k);
     rbf      = select_rbf(rbf_name);
-    C_ep     = C_ep_vec(k);
 
-    fprintf('\n=== Kernel: %s | C_ep=%.2f ===\n', rbf_name, C_ep);
+    fprintf('\n=== Kernel: %s | ep=%.2f ===\n', rbf_name, ep);
 
     for idx = 1:nn
 
         n_ctrs = n_ctrsVec(idx);
         x_ctrs = get_ctrs(n_ctrs, data_distribution, dim);
 
-        h_X            = fill_distance(x_ctrs, 10000);
-        if ep_mode == "fixed"   % h_X of the largest set: ep independent of n
-            h_X = fill_distance(get_ctrs(n_ctrsVec(end), data_distribution, dim), 10000);
-        end
-        ep             = C_ep * h_X;
         ep_used(k,idx) = ep;
         ker            = @(x, y) rbf(pdist2(x, y), ep);
 
@@ -157,13 +148,13 @@ for k = 1:nk
             ker, meas, y, reduced_param, dim, cf_opts(err_qmc));
 
         VZ_full = ker(Z_full, x_ctrs);
-        diag_full{k,idx} = cf_diagnostics(info, VZ_full, w_full, G, ker(X_test, x_ctrs));
+        diag_full{k,idx} = cf_diagnostics(info, VZ_full, w_full, G, ker(X_test, x_ctrs), solver);
         W_full  = diag(w_full);
         a_full  = LS_stable_solver(W_full, VZ_full, f(Z_full), solver);
 
         rms_hyper_full(k,idx)  = rmse(ker(X_test, x_ctrs) * a_full, f_test);
         cond_hyper_full(k,idx) = cond(sqrt(W_full) * VZ_full);
-        leb_hyper_full(k,idx)  = leb_svd(K_leb, VZ_full, W_full, 1e-12);
+        leb_hyper_full(k,idx)  = leb_svd(K_leb, VZ_full, W_full, solver);
 
         % (B) Reduced exactness
         reduced_param = 1;
@@ -175,13 +166,13 @@ for k = 1:nk
             ker, meas, y, reduced_param, dim, cf_opts(err_qmc));
 
         VZ_red = ker(Z_red, x_ctrs);
-        diag_red{k,idx} = cf_diagnostics(info, VZ_red, w_red, G, ker(X_test, x_ctrs));
+        diag_red{k,idx} = cf_diagnostics(info, VZ_red, w_red, G, ker(X_test, x_ctrs), solver);
         W_red  = diag(w_red);
         a_red  = LS_stable_solver(W_red, VZ_red, f(Z_red), solver);
 
         rms_hyper_red(k,idx)  = rmse(ker(X_test, x_ctrs) * a_red, f_test);
         cond_hyper_red(k,idx) = cond(sqrt(W_red) * VZ_red);
-        leb_hyper_red(k,idx)  = leb_svd(K_leb, VZ_red, W_red, 1e-12);
+        leb_hyper_red(k,idx)  = leb_svd(K_leb, VZ_red, W_red, solver);
 
     end
 end
@@ -276,7 +267,7 @@ for k = 1:nk
     title(sprintf('f_2 - RMSE - %s kernel - %s points', ...
         rbf_names(k), data_distribution),'FontSize',12,'FontWeight','bold','Color','k');
 
-    fprintf('\n[RMSE slopes]  %s | C_ep=%.2f\n', rbf_names(k), C_ep_vec(k));
+    fprintf('\n[RMSE slopes]  %s | ep=%.2f\n', rbf_names(k), ep);
     fprintf('  %-48s  %+.4f\n',                  'Poly Hyper:',   slope_poly);
     fprintf('  %-48s  %+.4f  (theory: %+.4f)\n', 'Hyper Full:',   slope_hf, slope_hyp_theory);
     fprintf('  %-48s  %+.4f  (theory: %+.4f)\n', 'Hyper Reduced:',slope_hr, slope_hyp_theory);
@@ -326,8 +317,8 @@ for k = 1:nk
 end
 
 fprintf('\nDone. %d figures saved.\n', fig_id - 1);
-print_cf_diagnostics(diag_full, rbf_names, n_ctrsVec, sprintf('full exactness, ep %s', ep_mode));
-print_cf_diagnostics(diag_red,  rbf_names, n_ctrsVec, sprintf('reduced exactness, ep %s', ep_mode));
+print_cf_diagnostics(diag_full, rbf_names, n_ctrsVec, sprintf('full exactness, ep = %g', ep));
+print_cf_diagnostics(diag_red,  rbf_names, n_ctrsVec, sprintf('reduced exactness, ep = %g', ep));
 save(sprintf('diagnostics_%s.mat', fig_tag), 'diag_full', 'diag_red', 'ep_used', 'n_ctrsVec', 'rbf_names');
 
 %% =========================================================================

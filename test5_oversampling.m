@@ -30,7 +30,7 @@ addpath('functions')
 % -------------------------------------------------------------------------
 dim               = 1;
 data_distribution = "Halton";
-solver            = "SVD";
+solver            = "QR";
 
 rbf_names = ["LMatern", "QMatern"];
 tau_vec   = [2, 3];              % d = 1
@@ -135,7 +135,7 @@ for k = 1:nk
         SM_A(k,j)       = sum(w);
         wmin_A(k,j)     = min(w);
         rmsA_clean(k,j) = rmse(K_test * a, f_test);
-        lebA(k,j)       = leb_svd(K_leb, VZ, W, 1e-12);
+        lebA(k,j)       = leb_svd(K_leb, VZ, W, solver);
         condA(k,j)      = cond(sqrt(W) * VZ);
 
         acc = zeros(n_trials, 1);
@@ -217,7 +217,7 @@ for k = 1:nk
 
         a = LS_stable_solver(W, VZ, yZ, solver);
         rmsB_hyper_clean(k,idx) = rmse(K_test * a, f_test);
-        lebB_hyper(k,idx)       = leb_svd(K_leb, VZ, W, 1e-12);
+        lebB_hyper(k,idx)       = leb_svd(K_leb, VZ, W, solver);
 
         acc = zeros(n_trials, 1);
         for t = 1:n_trials

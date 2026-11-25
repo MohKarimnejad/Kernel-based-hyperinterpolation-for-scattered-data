@@ -6,7 +6,7 @@ V_tild = sqrt(W)*V;
 y_tild = sqrt(W)*y;
 
 if param == "QR"
-    [Q,R] = qr(V_tild);
+    [Q,R] = qr(V_tild, 0);   % economy QR (Algorithm 1)
     a = R \ (Q'*y_tild);
 elseif param == "SVD"
     [U,S,Vsvd] = svd(V_tild,'econ');

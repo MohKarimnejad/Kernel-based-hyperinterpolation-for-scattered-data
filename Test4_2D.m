@@ -22,7 +22,7 @@ clear; clc; close all
 % -------------------------------------------------------------------------
 dim               = 2;
 data_distribution = "Halton";
-solver            = "SVD";
+solver            = "QR";
 
 % Kernels and Sobolev smoothness orders for d=2:  tau = nu + d/2
 %   LMatern (nu=3/2): tau = 3/2 + 1 = 5/2
@@ -30,21 +30,16 @@ solver            = "SVD";
 rbf_names = ["LMatern", "QMatern"];
 tau_vec   = [5/2, 7/2];
 
-C_ep   = 100;
-ep_min = 3;
-ep_max = 30;
 
 % n is now allowed to grow well past the old ceiling of 140, since the
 % reduced cubature needs only O(n) nodes.
 n_ctrsVec = [80, 105, 140, 180, 240, 300, 380, 460, 560, 680, ...
     800, 1000, 1200];
 
-% Shape parameter (Reviewer 2, point 9):
-%   "scaled" : ep follows the rule below with h_X of the current set (ep changes with n)
-%   "fixed"  : the same rule is evaluated once with h_X of the LARGEST set,
-%              so the kernel does not depend on n (setting of Corollary 2)
-ep_mode = "fixed";
-fig_tag = sprintf('test4_%s', ep_mode);
+% Shape parameter: fixed, the same for all n and all kernels
+% (setting of Corollary 2; Reviewer 2, point 9)
+ep = 4;
+fig_tag = 'test4';
 
 %% ------------------------------------------------------------------------
 %  Test function: Franke function on [0,1]^2  (local subfunction below)
@@ -91,8 +86,8 @@ for k = 1:nk
     rbf_name = rbf_names(k);
     rbf      = select_rbf(rbf_name);
 
-    fprintf('\n=== Kernel: %s | C_ep=%.2f | tau=%.2f ===\n', ...
-        rbf_name, C_ep, tau_vec(k));
+    fprintf('\n=== Kernel: %s | ep=%.2f | tau=%.2f ===\n', ...
+        rbf_name, ep, tau_vec(k));
 
     for idx = 1:nn
 
@@ -100,10 +95,6 @@ for k = 1:nk
         x_ctrs = get_ctrs(n_ctrs, data_distribution, dim);
 
         h_X            = fill_distance(x_ctrs, 100);
-        if ep_mode == "fixed"   % h_X of the largest set: ep independent of n
-            h_X = fill_distance(get_ctrs(n_ctrsVec(end), data_distribution, dim), 100);
-        end
-        ep             = min(max(C_ep * h_X, ep_min), ep_max);
         ep_used(k,idx) = ep;
 
         ker = @(x, y) rbf(pdist2(x, y), ep);
@@ -129,7 +120,7 @@ for k = 1:nk
         M_red_vec(k,idx) = M_red;
 
         VZ_red  = ker(Z_red, x_ctrs);
-        diag_red{k,idx} = cf_diagnostics(info, VZ_red, w_red, G, ker(X_test, x_ctrs));
+        diag_red{k,idx} = cf_diagnostics(info, VZ_red, w_red, G, ker(X_test, x_ctrs), solver);
         W_red   = diag(w_red);
         rhs_red = f(Z_red);
 
@@ -163,7 +154,7 @@ for k = 1:nk
         f_pred_uls      = ker(X_test, x_ctrs) * a_uls;
         rms_uls(k,idx)  = rmse(f_pred_uls, f_test);
         cond_uls(k,idx) = cond(VZ_red);
-        leb_uls(k,idx)  = leb_svd(K_leb, VZ_red, W_uls, 1e-12);
+        leb_uls(k,idx)  = leb_svd(K_leb, VZ_red, W_uls, solver);
 
         % ------------------------------------------------------------------
         %  (C) HYPERINTERPOLATION — REDUCED EXACTNESS
@@ -173,7 +164,7 @@ for k = 1:nk
         f_pred_hr             = ker(X_test, x_ctrs) * a_red;
         rms_hyper_red(k,idx)  = rmse(f_pred_hr, f_test);
         cond_hyper_red(k,idx) = cond(sqrt(W_red) * VZ_red);
-        leb_hyper_red(k,idx)  = leb_svd(K_leb, VZ_red, W_red, 1e-12);
+        leb_hyper_red(k,idx)  = leb_svd(K_leb, VZ_red, W_red, solver);
 
         fprintf('    M_red = %d\n', M_red);
 
@@ -313,7 +304,7 @@ for k = 1:nk
     title(sprintf('f_4 - Lebesgue Constant - %s kernel - %s points', ...
         rbf_names(k), data_distribution),'FontSize',12,'FontWeight','bold','Color','k');
 
-    fprintf('\n[Lebesgue slopes]  %s | C_ep=%.2f\n', rbf_names(k), C_ep);
+    fprintf('\n[Lebesgue slopes]  %s | ep=%.2f\n', rbf_names(k), ep);
     fprintf('  %-48s  %+.4f\n', 'Interpolation:', slope_li);
     fprintf('  %-48s  %+.4f\n', 'Least Squares:', slope_lu);
     fprintf('  %-48s  %+.4f\n', 'Hyper Reduced:', slope_lhr);
@@ -322,7 +313,7 @@ for k = 1:nk
 end
 
 fprintf('\nDone. %d figures saved.\n', fig_id - 1);
-print_cf_diagnostics(diag_red,  rbf_names, n_ctrsVec, sprintf('reduced exactness, ep %s', ep_mode));
+print_cf_diagnostics(diag_red,  rbf_names, n_ctrsVec, sprintf('reduced exactness, ep = %g', ep));
 save(sprintf('diagnostics_%s.mat', fig_tag), 'diag_red', 'ep_used', 'n_ctrsVec', 'rbf_names');
 
 

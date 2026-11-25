@@ -1,4 +1,4 @@
-function D = cf_diagnostics(info, VZ, w, G, K_test, svd_tol)
+function D = cf_diagnostics(info, VZ, w, G, K_test, solver)
 % Diagnostics requested by Reviewer 2 (point 7) for one cubature rule.
 %
 % Inputs
@@ -7,7 +7,7 @@ function D = cf_diagnostics(info, VZ, w, G, K_test, svd_tol)
 %   w       : M x 1 cubature weights
 %   G       : n x n L2 Gram matrix of the kernel translates (moment.m)
 %   K_test  : n_test x n kernel translates on the error grid
-%   svd_tol : relative truncation used in LS_stable_solver / leb_svd (1e-12)
+%   solver  : "QR" or "SVD", the solver used in the test (LS_stable_solver)
 %
 % Output struct D
 %   M          number of nodes (= function evaluations)
@@ -15,7 +15,7 @@ function D = cf_diagnostics(info, VZ, w, G, K_test, svd_tol)
 %   w_min      min weight   (no weight is modified)
 %   w_max      max weight
 %   rank_A     numerical rank of the generator matrix A
-%   rank_VZ    numerical rank of sqrt(W) VZ (same truncation as the solver)
+%   rank_VZ    numerical rank of sqrt(W) VZ (singular values > 1e-12*max)
 %   repro      reproduction error on V_n:  ||K_test (a - c)||_2 / ||K_test c||_2
 %              for f = sum_j c_j K(., x_j), c random (fixed seed)
 %   eta        MZ constant, eq. (23):  max |lambda - 1| over the eigenvalues
@@ -24,7 +24,8 @@ function D = cf_diagnostics(info, VZ, w, G, K_test, svd_tol)
 %              V_n (eigenvalues of G below 1e-12*max are discarded)
 %   n_eta      dimension of that resolved subspace
 
-    if nargin < 6 || isempty(svd_tol), svd_tol = 1e-12; end
+    if nargin < 6 || isempty(solver), solver = "QR"; end
+    svd_tol = 1e-12;
 
     n = size(VZ, 2);
     W = diag(w);
@@ -37,7 +38,7 @@ function D = cf_diagnostics(info, VZ, w, G, K_test, svd_tol)
     rng_state = rng;  rng(1);
     c = randn(n, 1);
     rng(rng_state);
-    a  = LS_stable_solver(W, VZ, VZ * c, "SVD");
+    a  = LS_stable_solver(W, VZ, VZ * c, solver);
     repro = norm(K_test * (a - c)) / norm(K_test * c);
 
     % MZ constant
