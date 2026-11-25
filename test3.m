@@ -31,7 +31,7 @@ n_ctrsVec = [20, 30, 45, 60, 80, 105, 140, 180, 200];
 %   "scaled" : ep follows the rule below with h_X of the current set (ep changes with n)
 %   "fixed"  : the same rule is evaluated once with h_X of the LARGEST set,
 %              so the kernel does not depend on n (setting of Corollary 2)
-ep_mode = "scaled";
+ep_mode = "fixed";
 fig_tag = sprintf('test3_%s', ep_mode);
 anchor_idx = 2;
 
