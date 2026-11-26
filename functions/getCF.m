@@ -17,6 +17,10 @@ function [Phi, X, w, N, r, info] = getCF(~, N, x_ctrs, ker, meas, y, reduced_par
 %            .delta  rank tolerance for BG       (default 1e-10)
 %            .dN     nodes added per iteration   (default 1, as in the paper)
 %            .N_max  maximum number of nodes     (default 1e5)
+%            .nodes  function handle N -> first N nodes (N x dim) of a
+%                    nested sequence in Omega (default: Halton in [0,1]^dim)
+%            .gen    function handle X -> generator matrix A (K x N)
+%                    (default: prod_basis(X, x_ctrs, ker, reduced_param))
 %
 % Outputs
 %   Phi, X, w : generator matrix, nodes (N x dim), weights (N x 1)
@@ -30,9 +34,14 @@ function [Phi, X, w, N, r, info] = getCF(~, N, x_ctrs, ker, meas, y, reduced_par
     delta = get_opt(opts, 'delta', 1e-10);
     dN    = get_opt(opts, 'dN',    1);
     N_max = get_opt(opts, 'N_max', 1e5);
+    nodes_fun = get_opt(opts, 'nodes', []);
+    gen_fun   = get_opt(opts, 'gen',   []);
 
     % Nested Halton nodes, generated once and extended when needed
-    H = haltonseq(max(2 * N, 1000), dim);
+    H = [];
+    if isempty(get_opt(opts, 'nodes', []))
+        H = haltonseq(max(2 * N, 1000), dim);
+    end
 
     residual = Inf;
     w_min    = -Inf;
@@ -49,12 +58,20 @@ function [Phi, X, w, N, r, info] = getCF(~, N, x_ctrs, ker, meas, y, reduced_par
             break
         end
 
-        if N > size(H, 1)
-            H = haltonseq(2 * N, dim);
+        if isempty(nodes_fun)
+            if N > size(H, 1)
+                H = haltonseq(2 * N, dim);
+            end
+            X = H(1:N, :);
+        else
+            X = nodes_fun(N);
         end
-        X = H(1:N, :);
 
-        Phi = prod_basis(X, x_ctrs, ker, reduced_param);
+        if isempty(gen_fun)
+            Phi = prod_basis(X, x_ctrs, ker, reduced_param);
+        else
+            Phi = gen_fun(X);
+        end
         [w, residual, r] = BG_solver(Phi, meas, y, delta);
         w_min = min(w);
 
