@@ -1,51 +1,43 @@
-function [Phi, X, w, N, r, info] = getCF(~, N, x_ctrs, ker, meas, y, reduced_param, dim, opts)
-% Revised Algorithm 2: construction of the positive cubature formula.
+function [X, w, info] = getCF(N, meas, y, opts)
+% Revised Algorithm 2: construction of a positive cubature formula that is
+% exact on the space spanned by given generators.
 %
-% Nodes are the first N points of the Halton sequence (nested). At each
+% Nodes are the first N points of a nested sequence in Omega. At each
 % iteration the weights are computed by BG_solver (dependent rows removed
 % by pivoted QR) and the loop stops when
 %
 %     ||A W - b||_inf / ||b||_inf <= tol   and   min(W) > 0.
 %
-% The dimension of the product space is NOT estimated: the first input
-% (former K) is ignored and kept only for backward compatibility.
+% The dimension of the space spanned by the generators is not estimated.
 %
 % Inputs
-%   N      : initial number of nodes M_0
-%   opts   : struct with optional fields
-%            .tol    exactness tolerance        (default 1e-10)
-%            .delta  rank tolerance for BG       (default 1e-10)
-%            .dN     nodes added per iteration   (default 1, as in the paper)
-%            .N_max  maximum number of nodes     (default 1e5)
-%            .nodes  function handle N -> first N nodes (N x dim) of a
-%                    nested sequence in Omega (default: Halton in [0,1]^dim)
-%            .gen    function handle X -> generator matrix A (K x N)
-%                    (default: prod_basis(X, x_ctrs, ker, reduced_param))
+%   N     : initial number of nodes M_0
+%   meas  : |Omega|
+%   y     : moment vector b (K x 1)
+%   opts  : struct with fields
+%           .nodes  function handle N -> first N nodes (N x dim)   (required)
+%           .gen    function handle X -> generator matrix A (K x N) (required)
+%           .tol    exactness tolerance        (default 1e-10)
+%           .delta  rank tolerance for BG       (default 1e-10)
+%           .dN     nodes added per iteration   (default 1, as in the paper)
+%           .N_max  maximum number of nodes     (default 1e5)
 %
 % Outputs
-%   Phi, X, w : generator matrix, nodes (N x dim), weights (N x 1)
-%   N         : number of nodes returned
-%   r         : numerical rank of Phi at termination
-%   info      : struct with fields residual, w_min, w_max, rank, N,
-%               iterations, converged, tol, delta
+%   X     : nodes (N x dim)
+%   w     : weights (N x 1)
+%   info  : struct with fields residual, w_min, w_max, rank, N,
+%           iterations, converged, tol, delta
 
-    if nargin < 9 || isempty(opts), opts = struct(); end
     tol   = get_opt(opts, 'tol',   1e-10);
     delta = get_opt(opts, 'delta', 1e-10);
     dN    = get_opt(opts, 'dN',    1);
     N_max = get_opt(opts, 'N_max', 1e5);
-    nodes_fun = get_opt(opts, 'nodes', []);
-    gen_fun   = get_opt(opts, 'gen',   []);
+    nodes_fun = opts.nodes;
+    gen_fun   = opts.gen;
 
-    % Nested Halton nodes, generated once and extended when needed
-    H = [];
-    if isempty(get_opt(opts, 'nodes', []))
-        H = haltonseq(max(2 * N, 1000), dim);
-    end
-
-    residual = Inf;
-    w_min    = -Inf;
-    iter     = 0;
+    residual  = Inf;
+    w_min     = -Inf;
+    iter      = 0;
     converged = true;
 
     while (residual > tol) || (w_min <= 0)
@@ -58,20 +50,8 @@ function [Phi, X, w, N, r, info] = getCF(~, N, x_ctrs, ker, meas, y, reduced_par
             break
         end
 
-        if isempty(nodes_fun)
-            if N > size(H, 1)
-                H = haltonseq(2 * N, dim);
-            end
-            X = H(1:N, :);
-        else
-            X = nodes_fun(N);
-        end
-
-        if isempty(gen_fun)
-            Phi = prod_basis(X, x_ctrs, ker, reduced_param);
-        else
-            Phi = gen_fun(X);
-        end
+        X   = nodes_fun(N);
+        Phi = gen_fun(X);
         [w, residual, r] = BG_solver(Phi, meas, y, delta);
         w_min = min(w);
 
@@ -79,10 +59,8 @@ function [Phi, X, w, N, r, info] = getCF(~, N, x_ctrs, ker, meas, y, reduced_par
         N    = N + dN;
     end
 
-    N = size(X, 1);
-
     info = struct('residual', residual, 'w_min', w_min, 'w_max', max(w), ...
-                  'rank', r, 'N', N, 'iterations', iter, ...
+                  'rank', r, 'N', size(X, 1), 'iterations', iter, ...
                   'converged', converged, 'tol', tol, 'delta', delta);
 end
 

@@ -96,7 +96,7 @@ for qi = 1:nq
     opts.gen   = @(X) Pfun(X)';
     opts.N_max = size(H, 1);
 
-    [~, Z, w, ~, ~, info] = getCF([], 2 * n_poly(qi), [], [], Dom.meas, y, 1, dim, opts);
+    [Z, w, info] = getCF(2 * n_poly(qi), Dom.meas, y, opts);
 
     VZ = Pfun(Z);  W = diag(w);
     a  = LS_stable_solver(W, VZ, f(Z));
@@ -137,8 +137,7 @@ for k = 1:nk
         opts.gen   = @(X) [ones(size(X,1), 1), Kfun(X)]';
         opts.N_max = size(H, 1);
 
-        [~, Z, w, ~, ~, info] = getCF([], 2 * (n_ctrs + 1), x_ctrs, ker, ...
-            Dom.meas, y, 1, dim, opts);
+        [Z, w, info] = getCF(2 * (n_ctrs + 1), Dom.meas, y, opts);
 
         VZ = Kfun(Z);  W = diag(w);  yZ = f(Z);
         M_red(k, idx)    = numel(w);
