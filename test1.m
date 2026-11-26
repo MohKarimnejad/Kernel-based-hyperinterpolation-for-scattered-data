@@ -31,6 +31,8 @@ n_ctrsVec = [20, 30, 45, 60, 80, 105, 140, 180, 200];
 % (setting of Corollary 2; Reviewer 2, point 9)
 ep = 4;
 fig_tag = 'test1';
+out_dir = 'test1_results';   % figures, CSV tables and .mat file
+if ~exist(out_dir, 'dir'), mkdir(out_dir); end
 
 %% ------------------------------------------------------------------------
 %  Test function and evaluation grids
@@ -236,7 +238,7 @@ for k = 1:nk
 
     title(sprintf('f_1 - Condition Number - %s kernel - %s points', rbf_names(k), ...
         data_distribution),'FontSize',12,'FontWeight','bold','Color','k');
-    savefig_png(fig_id, fig_tag); fig_id = fig_id + 1;
+    savefig_png(fig_id, fig_tag, out_dir); fig_id = fig_id + 1;
 end
 
 % =========================================================================
@@ -287,7 +289,7 @@ for k = 1:nk
     title(sprintf('f_1 - RMSE - %s kernel - %s points', rbf_names(k), data_distribution), ...
         'FontSize',12,'FontWeight','bold','Color','k');
 
-    savefig_png(fig_id, fig_tag); fig_id = fig_id + 1;
+    savefig_png(fig_id, fig_tag, out_dir); fig_id = fig_id + 1;
 end
 
 % =========================================================================
@@ -335,26 +337,16 @@ for k = 1:nk
         data_distribution),'FontSize',12,'FontWeight','bold','Color','k');
 
 
-    savefig_png(fig_id, fig_tag); fig_id = fig_id + 1;
+    savefig_png(fig_id, fig_tag, out_dir); fig_id = fig_id + 1;
 end
 
 fprintf('\nDone. %d figures saved.\n', fig_id - 1);
-print_cf_diagnostics(diag_full, rbf_names, n_ctrsVec, sprintf('full exactness, ep = %g', ep));
-print_cf_diagnostics(diag_red,  rbf_names, n_ctrsVec, sprintf('reduced exactness, ep = %g', ep));
-save(sprintf('diagnostics_%s.mat', fig_tag), 'diag_full', 'diag_red', 'ep_used', 'n_ctrsVec', 'rbf_names');
+print_cf_diagnostics(diag_full, rbf_names, n_ctrsVec, sprintf('full exactness, ep = %g', ep), ...
+    fullfile(out_dir, 'cubature_diagnostics_full.csv'));
+print_cf_diagnostics(diag_red, rbf_names, n_ctrsVec, sprintf('reduced exactness, ep = %g', ep), ...
+    fullfile(out_dir, 'cubature_diagnostics_red.csv'));
+save(fullfile(out_dir, sprintf('diagnostics_%s.mat', fig_tag)), 'diag_full', 'diag_red', 'ep_used', 'n_ctrsVec', 'rbf_names');
 
-%% =========================================================================
-%  DIAGNOSTICS
-% =========================================================================
-fprintf('\n--- Adaptive ep table ---\n');
-fprintf('%-6s', 'n');
-for k = 1:nk, fprintf('  %-16s', sprintf('ep(%s)', rbf_names(k))); end
-fprintf('\n');
-for idx = 1:nn
-    fprintf('%-6d', n_ctrsVec(idx));
-    for k = 1:nk, fprintf('  %-16.3f', ep_used(k,idx)); end
-    fprintf('\n');
-end
 
 fprintf('\n--- Cubature size M_full vs n ---\n');
 fprintf('%-6s', 'n');
@@ -365,3 +357,8 @@ for idx = 1:nn
     for k = 1:nk, fprintf('  %-16d', M_full_vec(k,idx)); end
     fprintf('\n');
 end
+
+% CSV of the table above
+T_M = array2table([n_ctrsVec(:), M_full_vec'], 'VariableNames', ...
+    [{'n'}, cellstr("M_full_" + rbf_names)]);
+writetable(T_M, fullfile(out_dir, 'cubature_size_M_full.csv'));

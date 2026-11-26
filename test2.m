@@ -36,6 +36,8 @@ n_ctrsVec = [20, 30, 45, 60, 80, 105, 140, 180, 200];
 % (setting of Corollary 2; Reviewer 2, point 9)
 ep = 4;
 fig_tag = 'test2';
+out_dir = 'test2_results';   % figures, CSV tables and .mat file
+if ~exist(out_dir, 'dir'), mkdir(out_dir); end
 anchor_idx = 2;
 
 q_max      = 50;
@@ -225,7 +227,7 @@ for k = 1:nk
         rbf_names(k), data_distribution),'FontSize',12, ...
         'FontWeight','bold','Color','k');
 
-    savefig_png(fig_id, fig_tag); fig_id = fig_id + 1;
+    savefig_png(fig_id, fig_tag, out_dir); fig_id = fig_id + 1;
 end
 
 % =========================================================================
@@ -272,7 +274,7 @@ for k = 1:nk
     fprintf('  %-48s  %+.4f  (theory: %+.4f)\n', 'Hyper Full:',   slope_hf, slope_hyp_theory);
     fprintf('  %-48s  %+.4f  (theory: %+.4f)\n', 'Hyper Reduced:',slope_hr, slope_hyp_theory);
 
-    savefig_png(fig_id, fig_tag); fig_id = fig_id + 1;
+    savefig_png(fig_id, fig_tag, out_dir); fig_id = fig_id + 1;
 end
 
 % =========================================================================
@@ -313,23 +315,13 @@ for k = 1:nk
         rbf_names(k), data_distribution),'FontSize',12,'FontWeight','bold',...
         'Color','k');
 
-    savefig_png(fig_id, fig_tag); fig_id = fig_id + 1;
+    savefig_png(fig_id, fig_tag, out_dir); fig_id = fig_id + 1;
 end
 
 fprintf('\nDone. %d figures saved.\n', fig_id - 1);
-print_cf_diagnostics(diag_full, rbf_names, n_ctrsVec, sprintf('full exactness, ep = %g', ep));
-print_cf_diagnostics(diag_red,  rbf_names, n_ctrsVec, sprintf('reduced exactness, ep = %g', ep));
-save(sprintf('diagnostics_%s.mat', fig_tag), 'diag_full', 'diag_red', 'ep_used', 'n_ctrsVec', 'rbf_names');
+print_cf_diagnostics(diag_full, rbf_names, n_ctrsVec, sprintf('full exactness, ep = %g', ep), ...
+    fullfile(out_dir, 'cubature_diagnostics_full.csv'));
+print_cf_diagnostics(diag_red, rbf_names, n_ctrsVec, sprintf('reduced exactness, ep = %g', ep), ...
+    fullfile(out_dir, 'cubature_diagnostics_red.csv'));
+save(fullfile(out_dir, sprintf('diagnostics_%s.mat', fig_tag)), 'diag_full', 'diag_red', 'ep_used', 'n_ctrsVec', 'rbf_names');
 
-%% =========================================================================
-%  DIAGNOSTIC — adaptive ep table
-% =========================================================================
-fprintf('\n--- Adaptive ep table (d=1, Uniform) ---\n');
-fprintf('%-6s', 'n');
-for k = 1:nk, fprintf('  %-16s', sprintf('ep(%s)', rbf_names(k))); end
-fprintf('\n');
-for idx = 1:nn
-    fprintf('%-6d', n_ctrsVec(idx));
-    for k = 1:nk, fprintf('  %-16.3f', ep_used(k,idx)); end
-    fprintf('\n');
-end
