@@ -1,18 +1,16 @@
 clear; clc; close all
 
 %% =========================================================================
-%  TEST 1 — ADAPTIVE SHAPE PARAMETER   [Lebesgue computation corrected]
+%  TEST 1 — f_1(x) = sin(2 pi x) + 0.5 sin(4 pi x)   (dim = 1)
 %
-%  Lebesgue constants for the three projection methods (LS, Hyper Full,
-%  Hyper Reduced) are now computed through the SAME truncated-SVD
-%  pseudoinverse used to form the coefficients (leb_svd.m), instead of the
-%  squared normal matrix VZ'*W*VZ. This removes the kappa^2 amplification
-%  that previously contaminated the Lebesgue estimate. The interpolation
-%  Lebesgue constant is unchanged (computed from cardinal functions via a
-%  square Cholesky solve, which is not affected by normal-equation squaring).
-%
-%  All other settings — kernels, tau, n grid, shape parameter, solver,
-%  grid sizes — are identical to the previous version.
+%  Methods: kernel interpolation at X, unweighted least squares, kernel
+%  hyperinterpolation with full and with reduced exactness.
+%  Fixed shape parameter ep for all n and all kernels.
+%  Coefficients and Lebesgue constants of the least-squares type methods are
+%  computed with the economy QR of sqrt(W)*VZ (Algorithm 1; LS_stable_solver.m,
+%  leb_const.m). The interpolation Lebesgue constant is computed from the
+%  cardinal functions (Cholesky of K(X,X)).
+%  Output: figures, CSV tables and .mat file in test1_results/.
 % =========================================================================
 
 %% -------------------------------------------------------------------------
@@ -20,7 +18,6 @@ clear; clc; close all
 % -------------------------------------------------------------------------
 dim               = 1;
 data_distribution = "Halton";
-solver            = "QR";
 
 rbf_names = ["BMatern","LMatern", "QMatern"];
 tau_vec   = [1, 2, 3];  %1D
@@ -107,7 +104,7 @@ for k = 1:nk
         M_full_vec(k, idx) = M_full;
 
         VZ_full  = ker(Z_full, x_ctrs);
-        diag_full{k,idx} = cf_diagnostics(info, VZ_full, w_full, G, ker(X_test, x_ctrs), solver);
+        diag_full{k,idx} = cf_diagnostics(info, VZ_full, w_full, G, ker(X_test, x_ctrs));
         W_full   = diag(w_full);
         rhs_full = f(Z_full);
 
@@ -138,26 +135,22 @@ for k = 1:nk
         %  (B) LEAST SQUARES  (unweighted, W = I)
         % ------------------------------------------------------------------
         W_uls  = eye(M_full);
-        a_uls  = LS_stable_solver(W_uls, VZ_full, rhs_full, solver);
+        a_uls  = LS_stable_solver(W_uls, VZ_full, rhs_full);
 
         f_pred_uls      = ker(X_test, x_ctrs) * a_uls;
         rms_uls(k,idx)  = rmse(f_pred_uls, f_test);
         cond_uls(k,idx) = cond(VZ_full);
-
-        % SVD-consistent Lebesgue (W = I)
-        leb_uls(k,idx) = leb_svd(K_leb_ctrs, VZ_full, W_uls, solver);
+        leb_uls(k,idx) = leb_const(K_leb_ctrs, VZ_full, W_uls);
 
         % ------------------------------------------------------------------
         %  (C) HYPERINTERPOLATION — FULL EXACTNESS
         % ------------------------------------------------------------------
-        a_full = LS_stable_solver(W_full, VZ_full, rhs_full, solver);
+        a_full = LS_stable_solver(W_full, VZ_full, rhs_full);
 
         f_pred_hf             = ker(X_test, x_ctrs) * a_full;
         rms_hyper_full(k,idx) = rmse(f_pred_hf, f_test);
         cond_hyper_full(k,idx)= cond(sqrt(W_full) * VZ_full);
-
-        % SVD-consistent Lebesgue
-        leb_hyper_full(k,idx) = leb_svd(K_leb_ctrs, VZ_full, W_full, solver);
+        leb_hyper_full(k,idx) = leb_const(K_leb_ctrs, VZ_full, W_full);
 
         % ------------------------------------------------------------------
         %  (D) HYPERINTERPOLATION — REDUCED EXACTNESS
@@ -171,18 +164,16 @@ for k = 1:nk
             ker, meas, y_red, reduced_param, dim, cf_opts(err_qmc));
 
         VZ_red  = ker(Z_red, x_ctrs);
-        diag_red{k,idx} = cf_diagnostics(info, VZ_red, w_red, G, ker(X_test, x_ctrs), solver);
+        diag_red{k,idx} = cf_diagnostics(info, VZ_red, w_red, G, ker(X_test, x_ctrs));
         W_red   = diag(w_red);
         rhs_red = f(Z_red);
 
-        a_red = LS_stable_solver(W_red, VZ_red, rhs_red, solver);
+        a_red = LS_stable_solver(W_red, VZ_red, rhs_red);
 
         f_pred_hr            = ker(X_test, x_ctrs) * a_red;
         rms_hyper_red(k,idx) = rmse(f_pred_hr, f_test);
         cond_hyper_red(k,idx)= cond(sqrt(W_red) * VZ_red);
-
-        % SVD-consistent Lebesgue
-        leb_hyper_red(k,idx) = leb_svd(K_leb_ctrs, VZ_red, W_red, solver);
+        leb_hyper_red(k,idx) = leb_const(K_leb_ctrs, VZ_red, W_red);
 
         fprintf('    M_full = %d  |  M_red = %d\n', M_full, length(w_red));
 
@@ -293,7 +284,7 @@ for k = 1:nk
 end
 
 % =========================================================================
-%  BLOCK III — LEBESGUE CONSTANT log-log  (SVD-consistent)
+%  BLOCK III — LEBESGUE CONSTANT log-log
 % =========================================================================
 for k = 1:nk
     figure(fig_id); clf; set(gcf,'Color','w'); hold on;

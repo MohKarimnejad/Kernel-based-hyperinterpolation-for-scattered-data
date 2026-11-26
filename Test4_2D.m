@@ -13,8 +13,8 @@ clear; clc; close all
 %     (C) Kernel hyperinterpolation, REDUCED   (cubature nodes Z_red, W_red)
 %
 %  All Lebesgue constants for the projection methods (LS, Hyper Reduced) are
-%  computed through the same truncated-SVD pseudoinverse used to form the
-%  coefficients (leb_svd.m), avoiding the kappa^2 amplification.
+%  computed with the same economy QR of sqrt(W)*VZ used to form the
+%  coefficients (Algorithm 1; LS_stable_solver.m, leb_const.m).
 % =========================================================================
 
 %% -------------------------------------------------------------------------
@@ -22,7 +22,6 @@ clear; clc; close all
 % -------------------------------------------------------------------------
 dim               = 2;
 data_distribution = "Halton";
-solver            = "QR";
 
 % Kernels and Sobolev smoothness orders for d=2:  tau = nu + d/2
 %   LMatern (nu=3/2): tau = 3/2 + 1 = 5/2
@@ -120,7 +119,7 @@ for k = 1:nk
         M_red_vec(k,idx) = M_red;
 
         VZ_red  = ker(Z_red, x_ctrs);
-        diag_red{k,idx} = cf_diagnostics(info, VZ_red, w_red, G, ker(X_test, x_ctrs), solver);
+        diag_red{k,idx} = cf_diagnostics(info, VZ_red, w_red, G, ker(X_test, x_ctrs));
         W_red   = diag(w_red);
         rhs_red = f(Z_red);
 
@@ -149,22 +148,22 @@ for k = 1:nk
         %  (B) LEAST SQUARES  (unweighted, W = I, sampled at Z_red)
         % ------------------------------------------------------------------
         W_uls = eye(M_red);
-        a_uls = LS_stable_solver(W_uls, VZ_red, rhs_red, solver);
+        a_uls = LS_stable_solver(W_uls, VZ_red, rhs_red);
 
         f_pred_uls      = ker(X_test, x_ctrs) * a_uls;
         rms_uls(k,idx)  = rmse(f_pred_uls, f_test);
         cond_uls(k,idx) = cond(VZ_red);
-        leb_uls(k,idx)  = leb_svd(K_leb, VZ_red, W_uls, solver);
+        leb_uls(k,idx)  = leb_const(K_leb, VZ_red, W_uls);
 
         % ------------------------------------------------------------------
         %  (C) HYPERINTERPOLATION — REDUCED EXACTNESS
         % ------------------------------------------------------------------
-        a_red = LS_stable_solver(W_red, VZ_red, rhs_red, solver);
+        a_red = LS_stable_solver(W_red, VZ_red, rhs_red);
 
         f_pred_hr             = ker(X_test, x_ctrs) * a_red;
         rms_hyper_red(k,idx)  = rmse(f_pred_hr, f_test);
         cond_hyper_red(k,idx) = cond(sqrt(W_red) * VZ_red);
-        leb_hyper_red(k,idx)  = leb_svd(K_leb, VZ_red, W_red, solver);
+        leb_hyper_red(k,idx)  = leb_const(K_leb, VZ_red, W_red);
 
         fprintf('    M_red = %d\n', M_red);
 
@@ -267,7 +266,7 @@ for k = 1:nk
 end
 
 % =========================================================================
-%  BLOCK III — LEBESGUE CONSTANT log-log  (SVD-consistent values)
+%  BLOCK III — LEBESGUE CONSTANT log-log
 % =========================================================================
 for k = 1:nk
     figure(fig_id); clf; set(gcf,'Color','w'); hold on;

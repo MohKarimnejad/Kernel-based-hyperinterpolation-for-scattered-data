@@ -1,14 +1,16 @@
 clear; clc; close all
 
 %% =========================================================================
-%  TEST 3 — RUNGE FUNCTION  (dim = 1)
+%  TEST 3 — RUNGE FUNCTION f_3(x) = 1/(1 + 25 (2x-1)^2)   (dim = 1)
 %
-%  Lebesgue constants for ALL projection methods (polynomial hyper, kernel
-%  Hyper Full, kernel Hyper Reduced) computed through the SAME truncated-SVD
-%  pseudoinverse used for the coefficients (leb_svd.m), not via the squared
-%  normal matrix VtWV. Removes kappa^2 contamination in the kernel methods.
-%
-%  All other settings unchanged.
+%  Methods: polynomial hyperinterpolation (Gauss-Legendre rule, orthonormal
+%  Legendre basis), kernel hyperinterpolation with full and with reduced
+%  exactness. Fixed shape parameter ep for all n and all kernels.
+%  Kernel methods: coefficients and Lebesgue constants by the economy QR of
+%  sqrt(W)*VZ (Algorithm 1; LS_stable_solver.m, leb_const.m).
+%  Polynomial method: coefficients V' W f and Lebesgue constant of the same
+%  operator, max_x sum_k |sum_j v_j(x) v_j(z_k) w_k|.
+%  Output: figures, CSV tables and .mat file in test3_results/.
 % =========================================================================
 
 %% -------------------------------------------------------------------------
@@ -16,7 +18,6 @@ clear; clc; close all
 % -------------------------------------------------------------------------
 dim               = 1;
 data_distribution = "Uniform";
-solver            = "QR";
 
 f = @(x) 1 ./ (1 + 25 * (2*x - 1).^2);
 
@@ -103,8 +104,7 @@ for qi = 1:nq
     for j = 1:n_p
         V_leb(:,j) = sqrt(2*(j-1)+1) * legendreP(j-1, 2*X_leb-1);
     end
-    % SVD-consistent Lebesgue
-    leb_poly(qi) = leb_svd(V_leb, V_gl, W_gl, 1e-12);
+    leb_poly(qi) = max(sum(abs(V_leb * (V_gl' .* w_gl')), 2));
 
     fprintf('  q = %2d  (n_poly=%2d)  |  RMSE=%.3e  Cond=%.3e  Leb=%.3e\n', ...
         q, n_p, rms_poly(qi), cond_poly(qi), leb_poly(qi));
@@ -143,13 +143,13 @@ for k = 1:nk
             ker, meas, y, reduced_param, dim, cf_opts(err_qmc));
 
         VZ_full = ker(Z_full, x_ctrs);
-        diag_full{k,idx} = cf_diagnostics(info, VZ_full, w_full, G, ker(X_test, x_ctrs), solver);
+        diag_full{k,idx} = cf_diagnostics(info, VZ_full, w_full, G, ker(X_test, x_ctrs));
         W_full  = diag(w_full);
-        a_full  = LS_stable_solver(W_full, VZ_full, f(Z_full), solver);
+        a_full  = LS_stable_solver(W_full, VZ_full, f(Z_full));
 
         rms_hyper_full(k,idx)  = rmse(ker(X_test, x_ctrs) * a_full, f_test);
         cond_hyper_full(k,idx) = cond(sqrt(W_full) * VZ_full);
-        leb_hyper_full(k,idx)  = leb_svd(K_leb, VZ_full, W_full, solver);
+        leb_hyper_full(k,idx)  = leb_const(K_leb, VZ_full, W_full);
 
         % (B) Reduced exactness
         reduced_param = 1;
@@ -161,13 +161,13 @@ for k = 1:nk
             ker, meas, y, reduced_param, dim, cf_opts(err_qmc));
 
         VZ_red = ker(Z_red, x_ctrs);
-        diag_red{k,idx} = cf_diagnostics(info, VZ_red, w_red, G, ker(X_test, x_ctrs), solver);
+        diag_red{k,idx} = cf_diagnostics(info, VZ_red, w_red, G, ker(X_test, x_ctrs));
         W_red  = diag(w_red);
-        a_red  = LS_stable_solver(W_red, VZ_red, f(Z_red), solver);
+        a_red  = LS_stable_solver(W_red, VZ_red, f(Z_red));
 
         rms_hyper_red(k,idx)  = rmse(ker(X_test, x_ctrs) * a_red, f_test);
         cond_hyper_red(k,idx) = cond(sqrt(W_red) * VZ_red);
-        leb_hyper_red(k,idx)  = leb_svd(K_leb, VZ_red, W_red, solver);
+        leb_hyper_red(k,idx)  = leb_const(K_leb, VZ_red, W_red);
 
     end
 end
@@ -262,7 +262,7 @@ for k = 1:nk
 end
 
 % =========================================================================
-%  BLOCK III — LEBESGUE CONSTANT  (log-log, SVD-consistent)
+%  BLOCK III — LEBESGUE CONSTANT  (log-log)
 % =========================================================================
 for k = 1:nk
     figure(fig_id); clf; set(gcf,'Color','w'); hold on;
